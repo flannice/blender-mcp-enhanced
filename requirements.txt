@@ -1,0 +1,16 @@
+# Blender MCP Enhanced - 依赖清单
+# 仅列出必要依赖，无多余包
+
+# MCP协议通信（Trae IDE原生支持）
+# 无需额外安装MCP SDK
+
+# Python标准库（内置）
+# - json
+# - subprocess
+# - sys
+# - os
+# - tempfile
+# - pathlib
+
+# Blender内嵌Python
+# 无需安装，Blender自带Python环境

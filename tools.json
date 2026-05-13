@@ -1,0 +1,444 @@
+{
+  "tools": [
+    {
+      "name": "check_blender_connection",
+      "description": "验证Blender与MCP连通性。返回连接状态和Blender版本信息。",
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      }
+    },
+    {
+      "name": "create_primitive",
+      "description": "创建基本几何体（立方体、球体、圆柱、圆锥、平面、圆环）。支持设置位置、尺寸、名称。",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": ["cube", "sphere", "cylinder", "cone", "plane", "torus"],
+            "description": "几何体类型"
+          },
+          "name": {
+            "type": "string",
+            "description": "物体名称"
+          },
+          "location": {
+            "type": "array",
+            "items": {"type": "number"},
+            "minItems": 3,
+            "maxItems": 3,
+            "description": "位置 [x, y, z]"
+          },
+          "size": {
+            "type": "array",
+            "items": {"type": "number"},
+            "minItems": 3,
+            "maxItems": 3,
+            "description": "尺寸 [宽, 高, 深]"
+          }
+        },
+        "required": ["type"]
+      }
+    },
+    {
+      "name": "transform_object",
+      "description": "移动、旋转、缩放物体。支持全局/局部坐标模式。",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "物体名称"
+          },
+          "location": {
+            "type": "array",
+            "items": {"type": "number"},
+            "minItems": 3,
+            "maxItems": 3,
+            "description": "移动目标位置 [x, y, z]"
+          },
+          "rotation": {
+            "type": "array",
+            "items": {"type": "number"},
+            "minItems": 3,
+            "maxItems": 3,
+            "description": "旋转角度 [x, y, z]（度）"
+          },
+          "scale": {
+            "type": "array",
+            "items": {"type": "number"},
+            "minItems": 3,
+            "maxItems": 3,
+            "description": "缩放比例 [x, y, z]"
+          },
+          "mode": {
+            "type": "string",
+            "enum": ["global", "local"],
+            "default": "global",
+            "description": "坐标模式"
+          }
+        },
+        "required": ["name"]
+      }
+    },
+    {
+      "name": "edit_mesh",
+      "description": "编辑网格（挤出、倒角、细分、切割、焊接顶点）。",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "物体名称"
+          },
+          "operation": {
+            "type": "string",
+            "enum": ["extrude", "bevel", "subdivide", "knife", "weld_vertices"],
+            "description": "网格操作类型"
+          },
+          "params": {
+            "type": "object",
+            "description": "操作参数（根据operation类型不同）"
+          }
+        },
+        "required": ["name", "operation"]
+      }
+    },
+    {
+      "name": "boolean_operation",
+      "description": "布尔运算（并集、差集、交集）。",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "operation": {
+            "type": "string",
+            "enum": ["union", "difference", "intersect"],
+            "description": "布尔运算类型"
+          },
+          "object1": {
+            "type": "string",
+            "description": "第一个物体名称"
+          },
+          "object2": {
+            "type": "string",
+            "description": "第二个物体名称"
+          },
+          "result_name": {
+            "type": "string",
+            "description": "结果物体名称"
+          }
+        },
+        "required": ["operation", "object1", "object2"]
+      }
+    },
+    {
+      "name": "duplicate_object",
+      "description": "复制物体，支持阵列、镜像、径向复制。",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "源物体名称"
+          },
+          "mode": {
+            "type": "string",
+            "enum": ["single", "array", "mirror", "radial"],
+            "description": "复制模式"
+          },
+          "count": {
+            "type": "number",
+            "description": "复制数量（array/radial模式）"
+          },
+          "offset": {
+            "type": "array",
+            "items": {"type": "number"},
+            "minItems": 3,
+            "maxItems": 3,
+            "description": "复制偏移量 [x, y, z]"
+          },
+          "result_name": {
+            "type": "string",
+            "description": "复制物体名称前缀"
+          }
+        },
+        "required": ["name", "mode"]
+      }
+    },
+    {
+      "name": "add_material",
+      "description": "添加材质，设置颜色、粗糙度、金属度、透明度。",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "物体名称"
+          },
+          "color": {
+            "type": "array",
+            "items": {"type": "number"},
+            "minItems": 3,
+            "maxItems": 4,
+            "description": "基础颜色 [r, g, b, a]"
+          },
+          "roughness": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "description": "粗糙度 0-1"
+          },
+          "metallic": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "description": "金属度 0-1"
+          },
+          "transparency": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "description": "透明度 0-1"
+          },
+          "material_name": {
+            "type": "string",
+            "description": "材质名称"
+          }
+        },
+        "required": ["name"]
+      }
+    },
+    {
+      "name": "add_texture",
+      "description": "添加纹理贴图，支持UV展开。",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "物体名称"
+          },
+          "texture_path": {
+            "type": "string",
+            "description": "纹理图片路径"
+          },
+          "texture_type": {
+            "type": "string",
+            "enum": ["color", "roughness", "metallic", "normal", "height"],
+            "description": "纹理类型"
+          },
+          "uv_unwrap": {
+            "type": "boolean",
+            "default": true,
+            "description": "是否执行UV展开"
+          }
+        },
+        "required": ["name", "texture_path"]
+      }
+    },
+    {
+      "name": "add_light",
+      "description": "添加灯光（点光、聚光、日光、区域光）。",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": ["point", "spot", "sun", "area"],
+            "description": "灯光类型"
+          },
+          "name": {
+            "type": "string",
+            "description": "灯光名称"
+          },
+          "location": {
+            "type": "array",
+            "items": {"type": "number"},
+            "minItems": 3,
+            "maxItems": 3,
+            "description": "位置 [x, y, z]"
+          },
+          "rotation": {
+            "type": "array",
+            "items": {"type": "number"},
+            "minItems": 3,
+            "maxItems": 3,
+            "description": "旋转角度 [x, y, z]"
+          },
+          "color": {
+            "type": "array",
+            "items": {"type": "number"},
+            "minItems": 3,
+            "maxItems": 3,
+            "description": "灯光颜色 [r, g, b]"
+          },
+          "energy": {
+            "type": "number",
+            "description": "灯光强度"
+          }
+        },
+        "required": ["type"]
+      }
+    },
+    {
+      "name": "add_camera",
+      "description": "添加相机，设置视角、焦距、渲染分辨率。",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "相机名称"
+          },
+          "location": {
+            "type": "array",
+            "items": {"type": "number"},
+            "minItems": 3,
+            "maxItems": 3,
+            "description": "位置 [x, y, z]"
+          },
+          "rotation": {
+            "type": "array",
+            "items": {"type": "number"},
+            "minItems": 3,
+            "maxItems": 3,
+            "description": "旋转角度 [x, y, z]"
+          },
+          "focal_length": {
+            "type": "number",
+            "description": "焦距（毫米）"
+          },
+          "resolution_x": {
+            "type": "number",
+            "description": "渲染宽度"
+          },
+          "resolution_y": {
+            "type": "number",
+            "description": "渲染高度"
+          }
+        }
+      }
+    },
+    {
+      "name": "import_file",
+      "description": "导入文件（FBX、OBJ、GLB、STL、DWG/DXF）。",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "file_path": {
+            "type": "string",
+            "description": "文件路径"
+          },
+          "file_type": {
+            "type": "string",
+            "enum": ["fbx", "obj", "glb", "stl", "dwg", "dxf"],
+            "description": "文件类型"
+          },
+          "import_opts": {
+            "type": "object",
+            "description": "导入选项"
+          }
+        },
+        "required": ["file_path", "file_type"]
+      }
+    },
+    {
+      "name": "export_file",
+      "description": "导出文件（FBX、OBJ、GLB、STL、PNG渲染图）。",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "file_path": {
+            "type": "string",
+            "description": "导出文件路径"
+          },
+          "file_type": {
+            "type": "string",
+            "enum": ["fbx", "obj", "glb", "stl", "png"],
+            "description": "文件类型"
+          },
+          "export_opts": {
+            "type": "object",
+            "description": "导出选项"
+          }
+        },
+        "required": ["file_path", "file_type"]
+      }
+    },
+    {
+      "name": "manage_scene",
+      "description": "场景管理（新建、清空、保存、加载）。",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "action": {
+            "type": "string",
+            "enum": ["new", "clear", "save", "load"],
+            "description": "操作类型"
+          },
+          "file_path": {
+            "type": "string",
+            "description": "文件路径（save/load操作需要）"
+          }
+        },
+        "required": ["action"]
+      }
+    },
+    {
+      "name": "select_objects",
+      "description": "选择物体（按名称、按类型、按位置）。",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "mode": {
+            "type": "string",
+            "enum": ["name", "type", "location", "all", "none"],
+            "description": "选择模式"
+          },
+          "filter": {
+            "type": "string",
+            "description": "筛选条件（名称或类型）"
+          },
+          "location": {
+            "type": "array",
+            "items": {"type": "number"},
+            "minItems": 3,
+            "maxItems": 3,
+            "description": "位置范围 [x, y, z]"
+          },
+          "radius": {
+            "type": "number",
+            "description": "选择半径（位置模式）"
+          }
+        },
+        "required": ["mode"]
+      }
+    },
+    {
+      "name": "delete_objects",
+      "description": "删除物体。",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "names": {
+            "type": "array",
+            "items": {"type": "string"},
+            "description": "要删除的物体名称列表"
+          },
+          "mode": {
+            "type": "string",
+            "enum": ["selected", "all", "by_name"],
+            "description": "删除模式"
+          },
+          "filter": {
+            "type": "string",
+            "description": "筛选条件（by_name模式）"
+          }
+        },
+        "required": ["mode"]
+      }
+    }
+  ]
+}

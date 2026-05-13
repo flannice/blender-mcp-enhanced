@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "blender-mcp": {
+      "command": "python",
+      "args": [
+        "E:/Chat/Trae-CN-IDE/Claude+Blender/blender-mcp-enhanced/server.py"
+      ],
+      "cwd": "E:/Chat/Trae-CN-IDE/Claude+Blender/blender-mcp-enhanced",
+      "name": "Blender MCP",
+      "description": "Blender 3D Modeling MCP Server"
+    }
+  }
+}
