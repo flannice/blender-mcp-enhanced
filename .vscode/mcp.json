@@ -1,11 +1,11 @@
 {
   "mcpServers": {
     "blender-mcp": {
-      "command": "python",
+      "command": "D:/Software/blender/blender-4.2.0-windows-x64/4.2/python/bin/python.exe",
       "args": [
-        "E:/Chat/Trae-CN-IDE/Claude+Blender/blender-mcp-enhanced/server.py"
+        "D:/AI/Trae CN/Trae CN/Blender-MCP-Ehanced/blender-mcp-enhanced/server.py"
       ],
-      "cwd": "E:/Chat/Trae-CN-IDE/Claude+Blender/blender-mcp-enhanced",
+      "cwd": "D:/AI/Trae CN/Trae CN/Blender-MCP-Ehanced/blender-mcp-enhanced",
       "name": "Blender MCP",
       "description": "Blender 3D Modeling MCP Server"
     }

@@ -1,5 +1,5 @@
 """
-Blender MCP Server - MCP Protocol (stdio) + TCP (9876)
+Blender MCP Server - Controls running Blender via addon TCP connection
 """
 
 import sys
@@ -10,13 +10,35 @@ import subprocess
 import os
 import tempfile
 
-BLENDER_PATH = r"E:\Chat\Trae-CN-IDE\Claude+Blender\blender-mcp-enhanced\blender-4.2.0-windows-x64\blender-4.2.0-windows-x64\blender.exe"
+BLENDER_PATH = r"D:\Software\blender\blender-4.2.0-windows-x64\blender.exe"
 PORT = 9876
 
 PROTOCOL_VERSION = "2024-11-05"
 
+# Global: connected Blender client
+blender_client = None
+blender_client_lock = threading.Lock()
 
-def execute_blender(script):
+
+def execute_blender_direct(script):
+    """Execute script in running Blender via addon, or fallback to background"""
+    with blender_client_lock:
+        if blender_client is not None:
+            try:
+                # Send script to connected Blender addon
+                cmd = {"type": "script", "script": script}
+                blender_client.sendall(json.dumps(cmd).encode('utf-8'))
+                
+                # Wait for response
+                blender_client.settimeout(30.0)
+                data = blender_client.recv(4096)
+                result = json.loads(data.decode('utf-8'))
+                if result.get("status") == "ok":
+                    return result.get("output", "")
+            except:
+                pass
+    
+    # Fallback: run in background Blender
     try:
         with tempfile.NamedTemporaryFile(mode='w', suffix='.py', delete=False, encoding='utf-8') as f:
             f.write('import bpy\n')
@@ -41,10 +63,14 @@ def execute_blender(script):
 
 def handle_tool(tool_name, args):
     if tool_name == "check_blender_connection":
-        result = execute_blender("print('BLENDER_OK')")
+        with blender_client_lock:
+            if blender_client is not None:
+                return {"content": [{"type": "text", "text": "✅ Blender connected (via addon)"}]}
+        
+        result = execute_blender_direct("print('BLENDER_OK')")
         if "BLENDER_OK" in result:
-            return {"content": [{"type": "text", "text": "Blender connected"}]}
-        return {"content": [{"type": "text", "text": f"Error: {result}"}]}
+            return {"content": [{"type": "text", "text": "✅ Blender connected (background mode)"}]}
+        return {"content": [{"type": "text", "text": "❌ Error: " + result}]}
 
     elif tool_name == "create_primitive":
         prim_type = args.get("type", "cube")
@@ -62,7 +88,7 @@ obj = bpy.context.active_object
 obj.name = '{name}'
 print('CREATED: ' + obj.name)
 """
-        result = execute_blender(script)
+        result = execute_blender_direct(script)
         return {"content": [{"type": "text", "text": result}]}
 
     elif tool_name == "add_light":
@@ -72,7 +98,7 @@ light = bpy.context.active_object
 light.data.energy = 1000
 print('LIGHT_ADDED')
 """
-        result = execute_blender(script)
+        result = execute_blender_direct(script)
         return {"content": [{"type": "text", "text": result}]}
 
     elif tool_name == "add_camera":
@@ -82,7 +108,7 @@ camera = bpy.context.active_object
 bpy.context.scene.camera = camera
 print('CAMERA_ADDED')
 """
-        result = execute_blender(script)
+        result = execute_blender_direct(script)
         return {"content": [{"type": "text", "text": result}]}
 
     elif tool_name == "delete_objects":
@@ -91,7 +117,7 @@ bpy.ops.object.select_all(action='SELECT')
 bpy.ops.object.delete(use_global=False)
 print('DELETED')
 """
-        result = execute_blender(script)
+        result = execute_blender_direct(script)
         return {"content": [{"type": "text", "text": result}]}
 
     return {"content": [{"type": "text", "text": f"Unknown tool: {tool_name}"}]}
@@ -103,6 +129,10 @@ def handle_mcp_request(request):
     params = request.get("params", {})
 
     try:
+        # Handle notifications (no id, no response needed)
+        if req_id is None:
+            return None
+
         if method == "initialize":
             return {
                 "jsonrpc": "2.0",
@@ -120,11 +150,62 @@ def handle_mcp_request(request):
                 "id": req_id,
                 "result": {
                     "tools": [
-                        {"name": "check_blender_connection", "description": "Check Blender"},
-                        {"name": "create_primitive", "description": "Create primitive"},
-                        {"name": "add_light", "description": "Add light"},
-                        {"name": "add_camera", "description": "Add camera"},
-                        {"name": "delete_objects", "description": "Delete objects"},
+                        {
+                            "name": "check_blender_connection",
+                            "description": "Check Blender connection",
+                            "inputSchema": {
+                                "type": "object",
+                                "properties": {},
+                                "required": []
+                            }
+                        },
+                        {
+                            "name": "create_primitive",
+                            "description": "Create primitive object",
+                            "inputSchema": {
+                                "type": "object",
+                                "properties": {
+                                    "type": {
+                                        "type": "string",
+                                        "description": "Primitive type (cube or sphere)",
+                                        "default": "cube"
+                                    },
+                                    "name": {
+                                        "type": "string",
+                                        "description": "Object name",
+                                        "default": "Primitive"
+                                    }
+                                },
+                                "required": []
+                            }
+                        },
+                        {
+                            "name": "add_light",
+                            "description": "Add a light source",
+                            "inputSchema": {
+                                "type": "object",
+                                "properties": {},
+                                "required": []
+                            }
+                        },
+                        {
+                            "name": "add_camera",
+                            "description": "Add a camera",
+                            "inputSchema": {
+                                "type": "object",
+                                "properties": {},
+                                "required": []
+                            }
+                        },
+                        {
+                            "name": "delete_objects",
+                            "description": "Delete all objects",
+                            "inputSchema": {
+                                "type": "object",
+                                "properties": {},
+                                "required": []
+                            }
+                        }
                     ]
                 }
             }
@@ -141,59 +222,35 @@ def handle_mcp_request(request):
         return {"jsonrpc": "2.0", "id": req_id, "error": {"code": -32601, "message": f"Unknown method: {method}"}}
 
     except Exception as e:
-        return {"jsonrpc": "2.0", "id": req_id, "error": {"code": -32603, "message": str(e)}}
+        if req_id is not None:
+            return {"jsonrpc": "2.0", "id": req_id, "error": {"code": -32603, "message": str(e)}}
+        return None
 
 
 def run_tcp():
-    """TCP server for Blender client"""
+    """TCP server - accepts connection from Blender addon"""
+    global blender_client
     try:
         server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         server.bind(('127.0.0.1', PORT))
         server.listen(5)
 
-        def handle_client(client_socket, addr):
-            try:
-                client_socket.settimeout(60.0)
-                data = b''
-                while True:
-                    chunk = client_socket.recv(4096)
-                    if not chunk:
-                        break
-                    data += chunk
-                    try:
-                        command = json.loads(data.decode('utf-8'))
-                        tool = command.get("tool", "")
-                        params = command.get("params", {})
-
-                        if tool == "ping" or tool == "check_connection":
-                            result = {"status": "ok", "message": "pong"}
-                        elif tool == "create_primitive":
-                            result = handle_tool("create_primitive", params)
-                            result = {"status": "ok", "message": str(result)}
-                        else:
-                            result = {"status": "ok"}
-
-                        client_socket.sendall(json.dumps(result).encode('utf-8'))
-                        break
-                    except json.JSONDecodeError:
-                        continue
-            except:
-                pass
-            finally:
-                client_socket.close()
-
         while True:
             client, addr = server.accept()
-            thread = threading.Thread(target=handle_client, args=(client, addr))
-            thread.daemon = True
-            thread.start()
+            with blender_client_lock:
+                if blender_client is not None:
+                    try:
+                        blender_client.close()
+                    except:
+                        pass
+                blender_client = client
     except:
         pass
 
 
 if __name__ == "__main__":
-    # Start TCP in background
+    # Start TCP server in background
     tcp_thread = threading.Thread(target=run_tcp, daemon=True)
     tcp_thread.start()
 
@@ -206,7 +263,8 @@ if __name__ == "__main__":
         try:
             request = json.loads(line)
             response = handle_mcp_request(request)
-            sys.stdout.write(json.dumps(response) + "\n")
-            sys.stdout.flush()
+            if response is not None:
+                sys.stdout.write(json.dumps(response) + "\n")
+                sys.stdout.flush()
         except:
             pass

@@ -4,124 +4,122 @@ bl_info = {
     "version": (1, 0, 8),
     "blender": (4, 2, 0),
     "location": "View3D > Sidebar > MCP",
-    "description": "Blender MCP - TCP Client",
+    "description": "Blender MCP - Connect to Claude",
     "category": "Development",
 }
 
 import bpy
 import socket
 import json
-
+import threading
+import sys
+from io import StringIO
 
 PORT = 9876
+connected = False
+client_socket = None
+running = False
 
 
-def mcp_send(tool: str, params: dict = None) -> dict:
-    if params is None:
-        params = {}
-
-    try:
-        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        sock.settimeout(180)  # 3 minute timeout for Blender
-        sock.connect(('127.0.0.1', PORT))
-
-        # Send command immediately
-        command = {"tool": tool, "params": params}
-        sock.sendall(json.dumps(command).encode('utf-8'))
-
-        # Wait for single response
-        sock.settimeout(60)
-        response = b''
-        chunk = sock.recv(4096)
-        response += chunk
-
-        sock.close()
-
-        return json.loads(response.decode('utf-8'))
-
-    except socket.timeout:
-        return {"status": "error", "message": "Timeout - server not responding"}
-    except ConnectionRefusedError:
-        return {"status": "error", "message": "Connection refused - server not running"}
-    except Exception as e:
-        return {"status": "error", "message": str(e)}
+class CapturePrint(StringIO):
+    def __init__(self):
+        super().__init__()
+        self.old_stdout = sys.stdout
+    
+    def write(self, data):
+        self.old_stdout.write(data)
+        super().write(data)
+    
+    def __enter__(self):
+        sys.stdout = self
+        return self
+    
+    def __exit__(self, *args):
+        sys.stdout = self.old_stdout
 
 
-class MCP_OT_ping(bpy.types.Operator):
-    bl_idname = "mcp.ping"
-    bl_label = "Ping"
+def mcp_loop():
+    global client_socket, connected, running
+    running = True
+    
+    while running:
+        try:
+            if not connected:
+                try:
+                    client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                    client_socket.settimeout(5.0)
+                    client_socket.connect(('127.0.0.1', PORT))
+                    connected = True
+                except:
+                    bpy.app.timers.register(lambda: None, first_interval=2.0)
+                    continue
+            
+            # Wait for command from server
+            try:
+                client_socket.settimeout(1.0)
+                data = client_socket.recv(4096)
+                if not data:
+                    connected = False
+                    continue
+                
+                cmd = json.loads(data.decode('utf-8'))
+                
+                if cmd.get("type") == "script":
+                    script = cmd.get("script", "")
+                    
+                    # Execute the script and capture output
+                    output = ""
+                    try:
+                        with CapturePrint() as cap:
+                            exec(script)
+                        output = cap.getvalue()
+                    except Exception as e:
+                        output = f"ERROR: {str(e)}"
+                    
+                    # Send response
+                    response = {"status": "ok", "output": output}
+                    client_socket.sendall(json.dumps(response).encode('utf-8'))
+            
+            except socket.timeout:
+                continue
+            except json.JSONDecodeError:
+                continue
+                
+        except Exception as e:
+            connected = False
+            try:
+                if client_socket:
+                    client_socket.close()
+            except:
+                pass
+            bpy.app.timers.register(lambda: None, first_interval=2.0)
 
+
+class MCP_OT_connect(bpy.types.Operator):
+    bl_idname = "mcp.connect"
+    bl_label = "Connect to MCP"
+    
     def execute(self, context):
-        result = mcp_send("ping")
-        if result.get("status") == "ok":
-            self.report({'INFO'}, "MCP OK")
-        else:
-            self.report({'ERROR'}, result.get("message", "Failed"))
+        thread = threading.Thread(target=mcp_loop, daemon=True)
+        thread.start()
+        self.report({'INFO'}, "Connecting...")
         return {'FINISHED'}
 
 
-class MCP_OT_cube(bpy.types.Operator):
-    bl_idname = "mcp.cube"
-    bl_label = "Cube"
-
+class MCP_OT_disconnect(bpy.types.Operator):
+    bl_idname = "mcp.disconnect"
+    bl_label = "Disconnect"
+    
     def execute(self, context):
-        result = mcp_send("create_primitive", {"type": "cube", "name": "Cube"})
-        if result.get("status") == "ok":
-            self.report({'INFO'}, "Created")
-        else:
-            self.report({'ERROR'}, result.get("message", "Failed"))
-        return {'FINISHED'}
-
-
-class MCP_OT_sphere(bpy.types.Operator):
-    bl_idname = "mcp.sphere"
-    bl_label = "Sphere"
-
-    def execute(self, context):
-        result = mcp_send("create_primitive", {"type": "sphere", "name": "Sphere"})
-        if result.get("status") == "ok":
-            self.report({'INFO'}, "Created")
-        else:
-            self.report({'ERROR'}, result.get("message", "Failed"))
-        return {'FINISHED'}
-
-
-class MCP_OT_light(bpy.types.Operator):
-    bl_idname = "mcp.light"
-    bl_label = "Sun"
-
-    def execute(self, context):
-        result = mcp_send("add_light", {"type": "SUN"})
-        if result.get("status") == "ok":
-            self.report({'INFO'}, "Added")
-        else:
-            self.report({'ERROR'}, result.get("message", "Failed"))
-        return {'FINISHED'}
-
-
-class MCP_OT_camera(bpy.types.Operator):
-    bl_idname = "mcp.camera"
-    bl_label = "Camera"
-
-    def execute(self, context):
-        result = mcp_send("add_camera")
-        if result.get("status") == "ok":
-            self.report({'INFO'}, "Added")
-        else:
-            self.report({'ERROR'}, result.get("message", "Failed"))
-        return {'FINISHED'}
-
-
-class MCP_OT_delete(bpy.types.Operator):
-    bl_idname = "mcp.delete"
-    bl_label = "Delete"
-
-    def execute(self, context):
-        result = mcp_send("delete_all")
-        if result.get("status") == "ok":
-            self.report({'INFO'}, "Deleted")
-        else:
-            self.report({'ERROR'}, result.get("message", "Failed"))
+        global running, connected
+        running = False
+        connected = False
+        try:
+            if client_socket:
+                client_socket.close()
+        except:
+            pass
+        self.report({'INFO'}, "Disconnected")
         return {'FINISHED'}
 
 
@@ -131,36 +129,28 @@ class MCP_PT_panel(bpy.types.Panel):
     bl_space_type = 'VIEW_3D'
     bl_region_type = 'UI'
     bl_category = 'MCP'
-
+    
     def draw(self, context):
         layout = self.layout
-
-        layout.box().label(text="MCP Control", icon='WORLD')
-        layout.operator("mcp.ping", text="Ping", icon='PLAY')
-
-        layout.box().label(text="Primitives", icon='MESH_CUBE')
-        layout.operator("mcp.cube", text="Cube", icon='CUBE')
-        layout.operator("mcp.sphere", text="Sphere", icon='SPHERE')
-
-        layout.box().label(text="Scene", icon='SCENE_DATA')
-        layout.operator("mcp.delete", text="Delete All", icon='X')
-
-        layout.box().label(text="Camera/Light", icon='LIGHT')
-        layout.operator("mcp.light", text="Sun", icon='LIGHT_SUN')
-        layout.operator("mcp.camera", text="Camera", icon='CAMERA_STEREO')
+        
+        if connected:
+            layout.label(text="✅ Connected to MCP", icon='CHECKMARK')
+            layout.operator("mcp.disconnect", icon='X')
+        else:
+            layout.label(text="❌ Disconnected", icon='ERROR')
+            layout.operator("mcp.connect", icon='PLUGIN')
 
 
-classes = (
-    MCP_OT_ping, MCP_OT_cube, MCP_OT_sphere,
-    MCP_OT_light, MCP_OT_camera, MCP_OT_delete,
+classes = [
+    MCP_OT_connect,
+    MCP_OT_disconnect,
     MCP_PT_panel,
-)
+]
 
 
 def register():
     for cls in classes:
         bpy.utils.register_class(cls)
-    print("[MCP] Loaded")
 
 
 def unregister():
